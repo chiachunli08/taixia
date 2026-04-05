@@ -518,12 +518,20 @@ using namespace esphome::climate;
             mode_received = true;
             switch (response[i + 2]) {
               case 0:
-                this->mode = CLIMATE_MODE_COOL;
-                this->action = CLIMATE_ACTION_COOLING;
+                if (this->mode == CLIMATE_MODE_AUTO || this->mode == CLIMATE_MODE_HEAT_COOL) {
+                  this->action = CLIMATE_ACTION_COOLING;
+                } else {
+                  this->mode = CLIMATE_MODE_COOL;
+                  this->action = CLIMATE_ACTION_COOLING;
+                }
                 break;
               case 4:
-                this->mode = CLIMATE_MODE_HEAT;
-                this->action = CLIMATE_ACTION_HEATING;
+                if (this->mode == CLIMATE_MODE_AUTO || this->mode == CLIMATE_MODE_HEAT_COOL) {
+                  this->action = CLIMATE_ACTION_HEATING;
+                } else {
+                  this->mode = CLIMATE_MODE_HEAT;
+                  this->action = CLIMATE_ACTION_HEATING;
+                }
                 break;
               case 1:
                 this->mode = CLIMATE_MODE_DRY;
