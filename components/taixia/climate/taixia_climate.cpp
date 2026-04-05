@@ -116,7 +116,12 @@ using namespace esphome::climate;
               case CLIMATE_MODE_FAN_ONLY:
                 mode = 2;
                 break;
-  //            case CLIMATE_MODE_AUTO:
+              case CLIMATE_MODE_HEAT_COOL:
+                mode = 3;
+                break;
+              case CLIMATE_MODE_AUTO:
+                mode = 3;
+                break;
               default:
                 mode = 3;
                 break;
@@ -475,7 +480,8 @@ using namespace esphome::climate;
 
   void TaiXiaClimate::handle_response(std::vector<uint8_t> &response) {
     uint8_t i;
-    auto mode = CLIMATE_MODE_AUTO;
+    bool is_on = false;
+    bool mode_received = false;
     uint16_t value;
     uint8_t swing_vertical = 0;
     uint8_t swing_vertical_level = -1;
@@ -499,43 +505,42 @@ using namespace esphome::climate;
       }
       switch (response[i]) {
         case SERVICE_ID_CLIMATE_STATUS:
-        //case SERVICE_ID_ERV_STATUS:
-          if (get_u16(response, i + 1) != 1) {
+          if (get_u16(response, i + 1) == 1) {
+              is_on = true;
+          } else {
+              is_on = false;
               this->mode = CLIMATE_MODE_OFF;
               this->action = CLIMATE_ACTION_OFF;
-              mode = this->mode;
           }
           break;
         case SERVICE_ID_CLIMATE_MODE:
-        //case SERVICE_ID_FAN_MODE:
-          switch (response[i + 2]) {
-            case 0:
-              this->mode = CLIMATE_MODE_COOL;
-              this->action = CLIMATE_ACTION_COOLING;
-              break;
-            case 4:
-              this->mode = CLIMATE_MODE_HEAT;
-              this->action = CLIMATE_ACTION_HEATING;
-              break;
-            case 1:
-              this->mode = CLIMATE_MODE_DRY;
-              this->action = CLIMATE_ACTION_DRYING;
-              break;
-            case 2:
-              this->mode = CLIMATE_MODE_FAN_ONLY;
-              this->action = CLIMATE_ACTION_FAN;
-              break;
-            case 3:
-            default:
-              this->mode = CLIMATE_MODE_AUTO;
-              break;
+          if (is_on) {
+            mode_received = true;
+            switch (response[i + 2]) {
+              case 0:
+                this->mode = CLIMATE_MODE_COOL;
+                this->action = CLIMATE_ACTION_COOLING;
+                break;
+              case 4:
+                this->mode = CLIMATE_MODE_HEAT;
+                this->action = CLIMATE_ACTION_HEATING;
+                break;
+              case 1:
+                this->mode = CLIMATE_MODE_DRY;
+                this->action = CLIMATE_ACTION_DRYING;
+                break;
+              case 2:
+                this->mode = CLIMATE_MODE_FAN_ONLY;
+                this->action = CLIMATE_ACTION_FAN;
+                break;
+              case 3:
+                this->mode = CLIMATE_MODE_AUTO;
+                break;
+              default:
+                ESP_LOGW(TAG, "Unknown climate mode byte: %2.2x, ignoring", response[i + 2]);
+                break;
+            }
           }
-
-          if (mode == CLIMATE_MODE_OFF) {
-            this->mode = CLIMATE_MODE_OFF;
-            this->action = CLIMATE_ACTION_OFF;
-          }
-
         break;
         case SERVICE_ID_CLIMATE_FAN_SPEED:
         //case SERVICE_ID_FAN_SPEED:
@@ -568,10 +573,19 @@ using namespace esphome::climate;
           }
           break;
         case SERVICE_ID_CLIMATE_TARGET_TEMPERATURE:
-        //case SERVICE_ID_ERV_TARGET_TEMPERATURE:
-          this->target_temperature = (float)get_i16(response, i + 1);
-          if (this->sa_id_ == 14)
-            this->current_temperature = get_i16(response, i + 1);
+          {
+            int16_t raw_temp = get_i16(response, i + 1);
+            if (raw_temp >= 0 && raw_temp <= 100) {
+              this->target_temperature = (float)raw_temp;
+            } else {
+              ESP_LOGW(TAG, "Ignoring invalid target_temperature: %d", raw_temp);
+            }
+            if (this->sa_id_ == 14) {
+              if (raw_temp >= 0 && raw_temp <= 100) {
+                this->current_temperature = (float)raw_temp;
+              }
+            }
+          }
           break;
         case SERVICE_ID_CLIMATE_TEMPERATURE_INDOOR:
           this->current_temperature = get_i16(response, i + 1);
